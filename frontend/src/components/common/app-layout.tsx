@@ -10,8 +10,11 @@ export function AppLayout() {
   return (
     <div className="layout">
       <header className="header">
-        <h1>OLT ZTE C320 Monitor</h1>
-        <nav>
+        <div>
+          <h1 className="brand-title">AMCNet Monitoring OLT</h1>
+          <p className="brand-subtitle">Network Operations Dashboard</p>
+        </div>
+        <nav aria-label="Main navigation">
           {links.map((link) => (
             <NavLink
               key={link.to}
