@@ -89,6 +89,27 @@ services:
           cpus: '1.0'
           memory: 512M
 
+
+  frontend:
+    restart: unless-stopped
+    container_name: go-snmp-olt-zte-c320-frontend-dev
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${FRONTEND_API_BASE_URL:-http://localhost:8081}
+        VITE_API_KEY: ${FRONTEND_API_KEY:-}
+
+    depends_on:
+      app:
+        condition: service_started
+
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"
+
+    networks:
+      - snmp-olt-network
+
   redis:
     image: redis:7.2-alpine
     container_name: redis-dev
