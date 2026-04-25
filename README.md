@@ -63,6 +63,29 @@ curl http://localhost:8081/api/v1/board/1/pon/1 | jq
 task up
 ```
 
+
+### Frontend (ViteJS)
+Frontend app tersedia di direktori [`frontend/`](frontend/).
+
+```shell
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Aplikasi frontend default berjalan di `http://localhost:5173` dan mengakses API backend melalui `VITE_API_BASE_URL`.
+
+### Docker Compose (Backend + Frontend)
+Per April 25, 2026, `docker-compose.yaml` juga menjalankan service `frontend`.
+
+```shell
+docker compose up --build
+```
+
+- Backend API: `http://localhost:${SERVER_PORT:-8081}`
+- Frontend UI: `http://localhost:${FRONTEND_PORT:-5173}`
+
 ### Docker Compose (Production)
 ```shell
 cd examples/docker

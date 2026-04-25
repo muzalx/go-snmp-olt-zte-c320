@@ -70,3 +70,8 @@ bin/
 *.bak
 *.backup
 *.oldk6-results.json
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
