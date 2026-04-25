@@ -316,6 +316,38 @@ export const getOnusPaginated = async (params: {
 
 ---
 
+
+## Standar Deployment Frontend (Wajib Disamakan dengan Backend)
+Permintaan deployment frontend harus mengikuti pendekatan backend: **containerized dengan Docker**.
+
+Kebutuhan tambahan:
+- Wajib sediakan `Dockerfile` untuk frontend.
+- Wajib sediakan `docker-compose` integration agar frontend bisa jalan bersama service backend.
+- Gunakan environment variable saat build/run container (`VITE_API_BASE_URL`, `VITE_API_KEY`).
+- Tambahkan panduan run local dan production-like via Docker di `README` frontend.
+
+### Rencana Docker (Direkomendasikan)
+1. **Multi-stage Dockerfile**
+   - Stage 1: build app Vite (`node:lts-alpine`).
+   - Stage 2: serve static files via Nginx (`nginx:alpine`).
+2. **Konfigurasi reverse proxy**
+   - Route frontend static di `/`.
+   - Proxy request API ke backend service (opsional tergantung topologi).
+3. **Compose profile**
+   - Tambah service `frontend` pada `docker-compose.local.yaml` / `docker-compose.yaml` agar konsisten dengan workflow backend.
+4. **Healthcheck container frontend**
+   - Tambahkan healthcheck sederhana (HTTP GET ke root atau endpoint health Nginx).
+
+Contoh struktur file deployment frontend:
+
+```txt
+frontend/
+  Dockerfile
+  nginx.conf
+  .dockerignore
+  docker-compose.override.yml (opsional jika dipisah)
+```
+
 ## Acceptance Criteria (untuk lanjut implementasi)
 
 1. User bisa input board/pon valid lalu melihat daftar ONU paginated.
@@ -324,6 +356,7 @@ export const getOnusPaginated = async (params: {
 4. User bisa menjalankan aksi cache clear/refresh dengan feedback sukses/gagal.
 5. Semua error API tampil konsisten beserta `request_id` bila tersedia.
 6. Base URL API dan API key bisa diatur via environment.
+7. Frontend dapat di-build dan dijalankan melalui Docker, selaras dengan deployment backend.
 
 ---
 
@@ -344,4 +377,5 @@ export const getOnusPaginated = async (params: {
 3. Implement halaman `Health` + `ONU Explorer` terlebih dahulu (MVP core).
 4. Lanjutkan ke `ONU Detail` dan `Cache Tools`.
 5. Tambah testing dan hardening UX.
+6. Siapkan Dockerfile + compose integration untuk deployment frontend.
 
