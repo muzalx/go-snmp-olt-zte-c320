@@ -47,7 +47,7 @@ LABEL description="SNMP OLT Monitoring Service for ZTE C320"
 LABEL version="${APP_VERSION}"
 
 # Environment
-ENV APP_ENV=production
+ENV APP_ENV=development
 
 # Copy binary from dev stage
 COPY --from=dev /go/bin/app /app
