@@ -1,0 +1,267 @@
+# AGENT_IMPROVE_BACKEND
+
+## Tujuan
+Menambahkan fitur backend **CRUD (Add/Edit/Delete)** untuk manajemen ONU pada OLT ZTE C300, dengan dukungan **multi-OLT** (tidak terbatas 1 OLT; target minimal >2 OLT aktif).
+
+Cakupan utama:
+1. **Config ONT** (`pon-onu-mng` / `pon-onu-manage`)
+2. **Interface ONU** (`interface gpon-onu_x/x/x:xx`)
+3. **Registered ONU**
+4. **Manajemen OLT** (add/edit/delete OLT profile + pemilihan target OLT per request)
+
+Dokumen ini adalah rencana implementasi final versi terkoreksi berdasarkan feedback.
+
+---
+
+## 1) Scope Fitur (Functional Plan)
+
+### A. Config ONT (`pon-onu-manage`) — Prioritas Utama
+Add/edit/delete konfigurasi:
+- Device info
+- Network config
+- Ethernet UNI
+- IPv4 Hosts
+- WiFi ONT
+- Reboot ONT
+- Restore factory ONT
+
+**Outcome:** backend menghasilkan operation plan SNMP untuk konfigurasi ONT secara aman dan terkontrol.
+
+### B. Interface ONU (`interface gpon-onu_x/x/x:xx`)
+Add/edit/delete konfigurasi:
+- gemport
+- tcont
+- service-port / service
+- port binding
+- onu service
+- wan-ip
+- tr069
+
+### C. Registered ONU
+- Tambah registrasi ONU baru
+- Edit metadata ONU terdaftar
+- Soft delete (deactivate) ONU terdaftar
+
+### D. Multi-OLT Management (Tambahan Baru)
+- Add OLT profile
+- Edit OLT profile (credential, komunitas SNMP, timeout, dll)
+- Soft delete OLT profile (nonaktif, bukan hard remove)
+- List OLT + status konektivitas terakhir
+- Semua operasi ONU wajib menyertakan `olt_id` agar request jelas target OLT-nya
+
+**Outcome:** sistem dapat mengelola banyak OLT sekaligus, minimal lebih dari 2 OLT tanpa konflik state.
+
+---
+
+## 2) Desain API — Endpoint Generik (Sesuai Feedback)
+
+### 2.1 Generic ONU Config Endpoint (digabung)
+Gunakan endpoint generik tunggal untuk operasi perubahan:
+- `POST /api/v1/onu/config/execute`
+
+Aksi ditentukan melalui field JSON:
+- `operation`: `add` | `edit` | `delete`
+- `target`: `ont_config` | `interface` | `registered`
+
+### 2.2 OLT Management Endpoint
+- `POST /api/v1/olts` (add OLT)
+- `PUT /api/v1/olts/{olt_id}` (edit OLT)
+- `DELETE /api/v1/olts/{olt_id}` (soft delete OLT)
+- `GET /api/v1/olts` (list OLT)
+
+> Catatan: meskipun endpoint OLT tidak tunggal/generik, operasi add/edit/delete tetap seragam lewat method HTTP standar.
+
+---
+
+## 3) Format JSON (Sesuai Feedback)
+
+### 3.1 Request JSON — Generic ONU Execute
+```json
+{
+  "olt_id": "olt-jkt-01",
+  "operation": "add",
+  "target": "ont_config",
+  "dry_run": true,
+  "onu_ref": {
+    "slot": 1,
+    "pon": 2,
+    "onu_id": 10
+  },
+  "payload": {
+    "device_info": {
+      "description": "Pelanggan A"
+    },
+    "network_config": {
+      "mode": "dhcp",
+      "vlan": 100
+    }
+  },
+  "confirm": false
+}
+```
+
+### 3.2 Response JSON — Dry Run
+```json
+{
+  "success": true,
+  "mode": "dry_run",
+  "message": "Simulation generated successfully",
+  "data": {
+    "operation_plan": [
+      "set oid_xxx value_1",
+      "set oid_yyy value_2"
+    ],
+    "validation": {
+      "warnings": []
+    }
+  },
+  "request_id": "req-123"
+}
+```
+
+### 3.3 Response JSON — Execute
+```json
+{
+  "success": true,
+  "mode": "execute",
+  "message": "Configuration applied",
+  "data": {
+    "applied": true,
+    "updated_at": "2026-04-26T12:00:00Z"
+  },
+  "request_id": "req-124"
+}
+```
+
+---
+
+## 4) Arsitektur Implementasi (Layer by Layer)
+
+### Step 1 — Domain Model & Contract
+- Tambah model request/response generic execute di domain ONU
+- Tambah entity OLT profile untuk multi-OLT
+- Enum operation: `add`, `edit`, `delete`
+- Enum target: `ont_config`, `interface`, `registered`
+
+### Step 2 — HTTP Handler
+- Tambah handler generic execute ONU
+- Tambah handler manajemen OLT (CRUD + list)
+- Tetap gunakan response/error helper existing
+
+### Step 3 — Usecase
+- Orkestrasi validasi bisnis per operation + target
+- Resolusi `olt_id` → OLT profile aktif
+- Dry-run mode: generate plan tanpa SNMP SET
+- Execute mode: jalankan SNMP SET/aksi
+- Soft delete logic untuk registered ONU & OLT
+
+### Step 4 — Repository SNMP
+- Extend operasi write/set/execute
+- Support select target OLT berdasarkan `olt_id`
+- Retry/timeout per OLT profile
+
+### Step 5 — Repository OLT & Cache
+- Simpan OLT profiles (Redis/DB sesuai arsitektur existing)
+- Status field: `active`, `inactive`, `deleted_soft`
+- Invalidate/refresh cache setelah eksekusi perubahan
+
+### Step 6 — Routing & Middleware
+- Daftarkan route generic ONU + OLT management
+- Pertahankan middleware existing
+- Tambahkan RBAC policy enforcement per operasi
+
+### Step 7 — API Contract Docs
+- Update `api/openapi.yaml` untuk endpoint generic + OLT management
+- Update README + contoh JSON final
+- Update `.env.example` bila ada konfigurasi tambahan
+
+---
+
+## 5) Validation Rules (Final)
+- `olt_id` wajib ada dan status OLT harus aktif
+- `operation` wajib: add/edit/delete
+- `target` wajib: ont_config/interface/registered
+- `payload` wajib sesuai target
+- `delete` bersifat **soft delete**
+- `dry_run=true` tidak boleh menulis perubahan ke OLT
+- Action destructive (factory reset, delete) wajib `confirm=true`
+- Untuk edit: minimal ada 1 perubahan field
+
+---
+
+## 6) Dry-Run / Simulation Mode (Wajib)
+- Parameter: `dry_run: true|false`
+- Jika `true`:
+  - hanya validasi + generate operation plan
+  - tidak eksekusi SNMP SET
+  - response memuat warning/risk
+- Jika `false`:
+  - validasi + eksekusi nyata
+  - simpan audit log + invalidasi cache
+
+---
+
+## 7) Role-Based Authorization (Wajib)
+Contoh baseline policy:
+- `admin`
+  - add/edit/delete semua target + manage OLT + factory reset
+- `operator`
+  - add/edit config terbatas, tidak boleh delete/factory reset, tidak boleh manage OLT
+- `viewer`
+  - read-only
+
+RBAC akan dieksekusi di middleware/authorization layer sebelum handler bisnis.
+
+---
+
+## 8) Testing Plan
+
+### Unit Test
+- Handler generic ONU execute
+- Handler OLT management
+- Usecase dry-run vs execute
+- Usecase soft delete flow
+- RBAC matrix test (role x operation)
+
+### Integration/Contract Test
+- Multi-OLT routing (request ke `olt_id` berbeda)
+- Kontrak JSON request/response sesuai OpenAPI
+- Regression endpoint existing tetap aman
+
+### Non-Functional
+- Concurrency test untuk request simultan ke beberapa OLT
+- Timeout/retry behavior per OLT
+- Race test (`go test -race`)
+
+---
+
+## 9) Delivery Plan (Milestone)
+
+### Milestone 1 (Foundation)
+- Generic endpoint + model + validation dasar
+- Entity OLT profile + list/add/edit/delete (soft)
+
+### Milestone 2 (Config ONT — Prioritas)
+- Implement penuh add/edit/delete Config ONT
+- Dry-run + RBAC + unit/integration test
+
+### Milestone 3 (Interface ONU)
+- Implement add/edit/delete Interface ONU
+
+### Milestone 4 (Registered ONU)
+- Implement add/edit/soft delete Registered ONU
+
+### Milestone 5 (Hardening)
+- Metrics/logging lengkap + docs + regression test
+
+---
+
+## 10) Jawaban Final atas Poin Koreksi Anda
+1. Endpoint: **digabung endpoint generik** untuk operasi ONU (`/api/v1/onu/config/execute`).
+2. Format payload: **JSON** dengan schema baku (`olt_id`, `operation`, `target`, `dry_run`, `onu_ref`, `payload`, `confirm`).
+3. Delete behavior: **soft delete**.
+4. Dry-run/simulation: **ya, wajib tersedia**.
+5. Authorization: **tambahkan role-based authorization per operasi**.
+6. Prioritas implementasi pertama: **Config ONT**.
+
+Tambahan dari Anda juga sudah diakomodasi: dukungan **multi-OLT** (lebih dari 2 OLT) melalui manajemen OLT profile dan `olt_id` pada tiap request.

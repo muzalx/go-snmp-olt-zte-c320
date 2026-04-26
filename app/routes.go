@@ -9,6 +9,7 @@ import (
 	"github.com/Cepat-Kilat-Teknologi/go-snmp-olt-zte-c320/internal/handler"
 	"github.com/Cepat-Kilat-Teknologi/go-snmp-olt-zte-c320/internal/health"
 	"github.com/Cepat-Kilat-Teknologi/go-snmp-olt-zte-c320/internal/middleware"
+	"github.com/Cepat-Kilat-Teknologi/go-snmp-olt-zte-c320/internal/usecase"
 	"github.com/Cepat-Kilat-Teknologi/go-snmp-olt-zte-c320/pkg/metrics"
 	"github.com/go-chi/chi/v5"
 )
@@ -18,6 +19,9 @@ import (
 // dependency checking (readyz will then unconditionally report ready).
 func loadRoutes(onuHandler *handler.OnuHandler, checker *health.Checker) http.Handler {
 	router := chi.NewRouter()
+	oltUsecase := usecase.NewOLTUsecase()
+	onuConfigUsecase := usecase.NewONUConfigUsecase(oltUsecase)
+	onuConfigHandler := handler.NewOnuConfigHandler(onuConfigUsecase, oltUsecase)
 
 	// Request ID tracking (must be first so all downstream middleware sees it).
 	router.Use(middleware.RequestID)
@@ -85,6 +89,17 @@ func loadRoutes(onuHandler *handler.OnuHandler, checker *health.Checker) http.Ha
 			r.Use(middleware.ValidateBoardPonParams)
 			r.Get("/", onuHandler.GetByBoardIDAndPonIDWithPaginate)
 		})
+	})
+
+	apiV1Group.Route("/onu/config", func(r chi.Router) {
+		r.Post("/execute", onuConfigHandler.Execute)
+	})
+
+	apiV1Group.Route("/olts", func(r chi.Router) {
+		r.Post("/", onuConfigHandler.CreateOLT)
+		r.Get("/", onuConfigHandler.ListOLT)
+		r.Put("/{olt_id}", onuConfigHandler.UpdateOLT)
+		r.Delete("/{olt_id}", onuConfigHandler.DeleteOLT)
 	})
 
 	router.Mount("/api/v1", apiV1Group)

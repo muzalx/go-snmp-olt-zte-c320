@@ -212,6 +212,39 @@ curl -sS 'http://localhost:8081/api/v1/paginate/board/2/pon/8?limit=3&page=2' | 
 curl -sS -X DELETE localhost:8081/api/v1/board/2/pon/7/cache/clear | jq
 ```
 
+### Multi-OLT Profiles (NEW)
+```shell
+# Create OLT profile (admin)
+curl -sS -X POST localhost:8081/api/v1/olts \
+  -H "Content-Type: application/json" \
+  -H "X-Role: admin" \
+  -d '{"olt_id":"olt-jkt-1","name":"Jakarta OLT #1","host":"10.10.10.1","port":161,"community":"public","timeout_ms":1500}' | jq
+
+# List OLT profiles
+curl -sS localhost:8081/api/v1/olts | jq
+```
+
+### Generic ONU Add/Edit/Delete Execute (NEW)
+```shell
+# Dry-run simulation
+curl -sS -X POST localhost:8081/api/v1/onu/config/execute \
+  -H "Content-Type: application/json" \
+  -H "X-Role: operator" \
+  -d '{
+    "olt_id":"olt-jkt-1",
+    "operation":"add",
+    "target":"ont_config",
+    "dry_run":true,
+    "onu_ref":{"slot":1,"pon":1,"onu_id":10},
+    "payload":{"device_info":{"name":"ONU-10"}}
+  }' | jq
+```
+
+> Notes:
+> - Role policy: `admin` (all operations), `operator` (add/edit), `viewer` (read-only).
+> - `operation=delete` requires `"confirm": true`.
+> - `payload` is required for `add` and `edit`.
+
 ## Authentication
 
 When `API_KEY` environment variable is set, all `/api/v1` routes require the `X-API-Key` header:
