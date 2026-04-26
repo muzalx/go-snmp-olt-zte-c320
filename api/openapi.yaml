@@ -455,6 +455,189 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /api/v1/onu/config/execute:
+    post:
+      summary: Execute generic ONU configuration mutation
+      description: |
+        Generic Add/Edit/Delete endpoint for ONU mutation workflows (ONT config,
+        interface config, and registered ONU data). Supports dry-run simulation
+        and multi-OLT targeting via `olt_id`.
+      operationId: executeOnuConfig
+      tags:
+        - ONU Config
+      parameters:
+        - name: X-Role
+          in: header
+          required: true
+          description: RBAC role for operation authorization (`admin` or `operator`).
+          schema:
+            type: string
+            enum: [admin, operator, viewer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ONUExecuteRequest"
+      responses:
+        "200":
+          description: Dry-run plan generated or execute operation applied
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/WebResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/ONUExecuteResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/olts:
+    post:
+      summary: Create OLT profile
+      description: Creates a new multi-OLT profile used as target in ONU mutation operations.
+      operationId: createOltProfile
+      tags:
+        - OLT Profile
+      parameters:
+        - name: X-Role
+          in: header
+          required: true
+          description: Must be `admin`.
+          schema:
+            type: string
+            enum: [admin, operator, viewer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOLTProfileRequest"
+      responses:
+        "201":
+          description: OLT profile created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/WebResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/OLTProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    get:
+      summary: List OLT profiles
+      operationId: listOltProfiles
+      tags:
+        - OLT Profile
+      responses:
+        "200":
+          description: List of OLT profiles
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/WebResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/OLTProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/olts/{olt_id}:
+    put:
+      summary: Update OLT profile
+      operationId: updateOltProfile
+      tags:
+        - OLT Profile
+      parameters:
+        - name: olt_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Role
+          in: header
+          required: true
+          description: Must be `admin`.
+          schema:
+            type: string
+            enum: [admin, operator, viewer]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OLTProfileRequest"
+      responses:
+        "200":
+          description: OLT profile updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/WebResponse"
+                  - type: object
+                    properties:
+                      data:
+                        $ref: "#/components/schemas/OLTProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Soft delete OLT profile
+      operationId: softDeleteOltProfile
+      tags:
+        - OLT Profile
+      parameters:
+        - name: olt_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Role
+          in: header
+          required: true
+          description: Must be `admin`.
+          schema:
+            type: string
+            enum: [admin, operator, viewer]
+      responses:
+        "200":
+          description: OLT profile soft deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   securitySchemes:
     ApiKeyAuth:
@@ -758,6 +941,140 @@ components:
         - pon
         - onu_id
 
+    ONUExecuteRequest:
+      type: object
+      properties:
+        olt_id:
+          type: string
+          example: olt-jkt-1
+        operation:
+          type: string
+          enum: [add, edit, delete]
+        target:
+          type: string
+          enum: [ont_config, interface, registered]
+        dry_run:
+          type: boolean
+          default: false
+        confirm:
+          type: boolean
+          default: false
+        onu_ref:
+          $ref: "#/components/schemas/ONUReference"
+        payload:
+          type: object
+          additionalProperties: true
+      required:
+        - olt_id
+        - operation
+        - target
+        - onu_ref
+
+    ONUReference:
+      type: object
+      properties:
+        slot:
+          type: integer
+          minimum: 1
+        pon:
+          type: integer
+          minimum: 1
+        onu_id:
+          type: integer
+          minimum: 1
+      required:
+        - slot
+        - pon
+        - onu_id
+
+    ONUExecuteResult:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [dry_run, execute]
+        message:
+          type: string
+        applied:
+          type: boolean
+        operation_plan:
+          type: array
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        updated_at:
+          type: string
+          format: date-time
+        meta:
+          type: object
+          additionalProperties: true
+      required:
+        - mode
+        - message
+        - applied
+
+    OLTProfile:
+      type: object
+      properties:
+        olt_id:
+          type: string
+        name:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        community:
+          type: string
+        timeout_ms:
+          type: integer
+        status:
+          type: string
+          enum: [active, deleted_soft]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - olt_id
+        - host
+        - status
+        - created_at
+        - updated_at
+
+    OLTProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        community:
+          type: string
+        timeout_ms:
+          type: integer
+
+    CreateOLTProfileRequest:
+      allOf:
+        - type: object
+          properties:
+            olt_id:
+              type: string
+          required:
+            - olt_id
+        - $ref: "#/components/schemas/OLTProfileRequest"
+
     OnuSerialNumber:
       type: object
       description: ONU ID paired with its serial number
@@ -860,6 +1177,18 @@ components:
             error_code: INTERNAL_ERROR
             data: Invalid or missing API key
             request_id: d7dhp4pciod1cuth4i80
+    Forbidden:
+      description: Role is not permitted to perform operation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 403
+            status: Forbidden
+            error_code: FORBIDDEN
+            data: insufficient role for operation
+            request_id: d7dhp4pciod1cuth4i80
     NotFound:
       description: Resource not found
       content:
@@ -911,3 +1240,7 @@ tags:
     description: ONU ID listing and serial number lookup
   - name: Cache
     description: Cache management operations
+  - name: ONU Config
+    description: Generic add/edit/delete ONU configuration operations
+  - name: OLT Profile
+    description: Multi-OLT profile management endpoints

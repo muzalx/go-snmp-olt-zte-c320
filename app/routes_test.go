@@ -279,6 +279,23 @@ func TestLoadRoutes_MetricsEndpoint(t *testing.T) {
 	}
 }
 
+func TestLoadRoutes_ONUConfigExecuteRouteExists(t *testing.T) {
+	usecase := &mockOnuUsecase{}
+	onuHandler := handler.NewOnuHandler(usecase)
+	router := loadRoutes(onuHandler, nil)
+
+	req := httptest.NewRequest("POST", "/api/v1/onu/config/execute", nil)
+	req.Header.Set("X-Role", "admin")
+	rr := httptest.NewRecorder()
+
+	router.ServeHTTP(rr, req)
+
+	// Route should exist; handler returns bad request on empty body.
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 bad request from handler, got %d", rr.Code)
+	}
+}
+
 func TestLoadRoutes_HealthzEndpoint(t *testing.T) {
 	usecase := &mockOnuUsecase{}
 	onuHandler := handler.NewOnuHandler(usecase)
